@@ -35,7 +35,7 @@ def create_task(task: TaskCreate) -> TaskResponse:
 '''
 
 from fastapi import FastAPI, HTTPException, status
-
+#HTTPException：用来主动返回 HTTP 错误，比如任务不存在时返回 404。
 from app.schemas import TaskCreate, TaskResponse, TaskUpdate
 
 
@@ -44,6 +44,7 @@ app = FastAPI()
 
 tasks: dict[int, TaskResponse] = {}
 next_task_id = 1
+#临时数据存储
 
 
 @app.get("/health")

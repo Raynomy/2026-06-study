@@ -1,8 +1,9 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from app.routers.tasks import router as tasks_router
 from app.services.task_service import TaskService
-
+from app.exceptions import TaskNotFoundError
 from app.config import settings
 
 app = FastAPI(
@@ -13,6 +14,18 @@ app = FastAPI(
 
 task_service = TaskService()
 
+@app.exception_handler(TaskNotFoundError)
+def task_not_found_handler(
+    request: Request,
+    exc: TaskNotFoundError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "code": "TASK_NOT_FOUND",
+            "message": str(exc),
+        },
+    )
 
 @app.get("/health")
 def health_check() -> dict[str, str]:

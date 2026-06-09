@@ -1,6 +1,6 @@
-from fastapi import HTTPException, status
-
+from app.exceptions import TaskNotFoundError
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+
 
 
 class TaskService:
@@ -26,10 +26,7 @@ class TaskService:
 
     def get_task(self, task_id: int) -> TaskResponse:
         if task_id not in self.tasks:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Task {task_id} not found",
-            )
+            raise TaskNotFoundError(task_id)
 
         return self.tasks[task_id]
 
