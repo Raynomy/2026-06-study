@@ -1,3 +1,6 @@
+import logging
+import time
+
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -5,6 +8,12 @@ from app.routers.tasks import router as tasks_router
 from app.services.task_service import TaskService
 from app.exceptions import TaskNotFoundError
 from app.config import settings
+
+
+from app.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.app_name,
@@ -14,11 +23,35 @@ app = FastAPI(
 
 task_service = TaskService()
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.perf_counter()
+
+    response = await call_next(request)
+
+    cost = time.perf_counter() - start_time
+
+    logger.info(
+        "%s %s %s %.4fs",
+        request.method,
+        request.url.path,
+        response.status_code,
+        cost,
+    )
+
+    return response
+
 @app.exception_handler(TaskNotFoundError)
 def task_not_found_handler(
     request: Request,
     exc: TaskNotFoundError,
 ) -> JSONResponse:
+    logger.error(
+        "TaskNotFoundError path=%s message=%s",
+        request.url.path,
+        str(exc),
+    )
+
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={

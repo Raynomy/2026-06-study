@@ -13,7 +13,7 @@ def test_health_check():
     assert response.json() == {"status": "ok"}
 
 def test_create_task():
-    response = client.post(
+    response = client.post( 
         "/tasks",
         json={
             "title": "学习 pytest",
@@ -28,6 +28,11 @@ def test_create_task():
     assert data["title"] == "学习 pytest"
     assert data["description"] == "使用 TestClient 测试 FastAPI"
     assert data["status"] == "todo"
+#client.post(...) 是模拟请求接口
+#json={...} 是请求体
+#response.status_code 是状态码
+#response.json() 是响应内容
+#assert 是断言，判断结果是否符合预期
 
 def test_list_tasks():
     client.post(
