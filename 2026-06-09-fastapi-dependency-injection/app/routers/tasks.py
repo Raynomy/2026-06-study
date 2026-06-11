@@ -2,15 +2,11 @@ from fastapi import APIRouter, Depends, Path, status
 
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services.task_service import TaskService
+from app.dependencies import get_task_service
 
 
 router = APIRouter(prefix="/tasks", tags=["tasks"]) #RESTful API 设计
 
-
-def get_task_service() -> TaskService:
-    from app.main import task_service
-
-    return task_service
 
 
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED) #RESTful API 设计

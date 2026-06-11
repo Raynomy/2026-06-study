@@ -71,7 +71,229 @@ tests/
 | PATCH | `/tasks/{task_id}` | 更新任务 |
 | DELETE | `/tasks/{task_id}` | 删除任务 |
 
-## 5. 本地运行
+
+## 5. 接口说明与示例
+
+### 5.1 健康检查
+
+请求：
+
+```http
+GET /health
+```
+
+响应：
+
+```json
+{
+  "status": "ok"
+}
+```
+
+用途：
+
+```text
+用于确认 FastAPI 服务是否正常运行。
+```
+
+### 5.2 创建任务
+
+请求：
+
+```http
+POST /tasks
+```
+
+请求体：
+
+```json
+{
+  "title": "学习 FastAPI",
+  "description": "练习 routers / services / schemas 分层"
+}
+```
+
+响应状态码：
+
+```text
+201 Created
+```
+
+响应体：
+
+```json
+{
+  "id": 1,
+  "title": "学习 FastAPI",
+  "description": "练习 routers / services / schemas 分层",
+  "status": "todo"
+}
+```
+
+### 5.3 查询任务列表
+
+请求：
+
+```http
+GET /tasks
+```
+
+响应：
+
+```json
+[
+  {
+    "id": 1,
+    "title": "学习 FastAPI",
+    "description": "练习 routers / services / schemas 分层",
+    "status": "todo"
+  }
+]
+```
+
+### 5.4 查询单个任务
+
+请求：
+
+```http
+GET /tasks/1
+```
+
+响应：
+
+```json
+{
+  "id": 1,
+  "title": "学习 FastAPI",
+  "description": "练习 routers / services / schemas 分层",
+  "status": "todo"
+}
+```
+
+任务不存在时：
+
+```http
+GET /tasks/999
+```
+
+响应状态码：
+
+```text
+404 Not Found
+```
+
+响应体：
+
+```json
+{
+  "code": "TASK_NOT_FOUND",
+  "message": "Task 999 not found"
+}
+```
+
+### 5.5 更新任务
+
+请求：
+
+```http
+PATCH /tasks/1
+```
+
+请求体：
+
+```json
+{
+  "status": "doing"
+}
+```
+
+响应：
+
+```json
+{
+  "id": 1,
+  "title": "学习 FastAPI",
+  "description": "练习 routers / services / schemas 分层",
+  "status": "doing"
+}
+```
+
+非法状态：
+
+```json
+{
+  "status": "invalid"
+}
+```
+
+响应状态码：
+
+```text
+422 Unprocessable Entity
+```
+
+### 5.6 删除任务
+
+请求：
+
+```http
+DELETE /tasks/1
+```
+
+响应状态码：
+
+```text
+204 No Content
+```
+
+说明：
+
+```text
+删除成功后不返回响应体。
+```
+
+### 5.7 参数校验示例
+
+非法路径参数：
+
+```http
+GET /tasks/0
+```
+
+响应状态码：
+
+```text
+422 Unprocessable Entity
+```
+
+原因：
+
+```text
+task_id 使用 Path(ge=1) 限制，必须大于等于 1。
+```
+
+空标题：
+
+```json
+{
+  "title": "",
+  "description": "标题不能为空"
+}
+```
+
+响应状态码：
+
+```text
+422 Unprocessable Entity
+```
+
+原因：
+
+```text
+title 使用 Field(min_length=1, max_length=100) 限制，不能为空。
+```
+
+## 6. 本地运行
 
 进入项目目录：
 
@@ -97,7 +319,7 @@ http://127.0.0.1:8000/health
 http://127.0.0.1:8000/docs
 ```
 
-## 6. 示例请求
+## 7. 示例请求
 
 创建任务：
 
@@ -128,7 +350,7 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-## 7. 运行测试
+## 8. 运行测试
 
 在项目目录执行：
 
@@ -149,7 +371,7 @@ http://127.0.0.1:8000/docs
 - 空标题返回 `422`
 - 非法任务状态返回 `422`
 
-## 8. 学习重点
+## 9. 学习重点
 
 ### FastAPI 路由
 
@@ -208,14 +430,14 @@ ERROR app.main TaskNotFoundError path=/tasks/999 message=Task 999 not found
 
 使用 `pytest` 和 `TestClient` 自动测试 API，减少手动 Swagger 测试。
 
-## 9. 当前限制
+## 10. 当前限制
 
 - 当前任务数据保存在内存中，服务重启后会丢失
 - 暂未接入数据库
 - 暂未加入用户认证和权限控制
 - 暂未接入真实 Agent 或 LLM
 
-## 10. 后续计划
+## 11. 后续计划
 
 - 接入 SQLite / PostgreSQL
 - 增加数据库 session 依赖

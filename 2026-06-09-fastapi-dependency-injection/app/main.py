@@ -5,7 +5,6 @@ from fastapi import Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.routers.tasks import router as tasks_router
-from app.services.task_service import TaskService
 from app.exceptions import TaskNotFoundError
 from app.config import settings
 
@@ -21,7 +20,6 @@ app = FastAPI(
     debug=settings.debug,
 )
 
-task_service = TaskService()
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
