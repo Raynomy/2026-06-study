@@ -10,6 +10,8 @@ from app.config import settings
 
 
 from app.logging_config import setup_logging
+from app.database import Base, engine
+from app.models import task
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -19,6 +21,10 @@ app = FastAPI(
     version=settings.app_version,
     debug=settings.debug,
 )
+
+Base.metadata.create_all(bind=engine)
+#根据所有继承 Base 的模型
+#在 engine 连接的数据库里创建表
 
 
 @app.middleware("http")

@@ -8,3 +8,4 @@ __pycache__/
 .DS_Store
 demo.txt
 **/demo.txt
+*.db
