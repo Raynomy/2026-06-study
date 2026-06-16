@@ -1,447 +1,307 @@
-# FastAPI Dependency Injection Task API
+# 2026-06-15-02 FastAPI JWT Auth
 
-这是一个用于学习 FastAPI 工程化结构的任务管理 API 项目。
+这个目录是在用户注册 / 登录项目基础上加入 JWT 鉴权的版本。
 
-项目从基础 CRUD API 出发，逐步加入了：
+项目重点是让登录成功后返回 `access_token`，并用 `Authorization: Bearer <token>` 保护任务接口。
 
-- RESTful API 设计
-- Pydantic 请求体和响应模型
-- FastAPI 依赖注入
-- routers / schemas / services 分层结构
-- 统一异常处理
-- 请求参数校验
-- 请求日志和错误日志
-- pytest + TestClient 自动化测试
+## 学习目标
 
-## 1. 技术栈
+- 学习 JWT 基础流程
+- 使用 `PyJWT` 创建和解析 token
+- 登录成功后返回 `access_token`
+- 使用 `OAuth2PasswordRequestForm` 适配 Swagger 登录
+- 使用 `OAuth2PasswordBearer` 从请求头读取 token
+- 实现 `get_current_user`
+- 给 `/tasks` 接口加鉴权
+- 修改测试，让任务接口请求携带 token
 
-- Python 3.10
-- FastAPI
-- Pydantic
-- Uvicorn
-- pytest
-- TestClient
-
-## 2. 项目结构
+## 项目结构
 
 ```text
-app/
-├── __init__.py
-├── main.py
-├── config.py
-├── exceptions.py
-├── logging_config.py
-├── routers/
+2026-06-15-02-fastapi-jwt-auth/
+├── app/
 │   ├── __init__.py
-│   └── tasks.py
-├── schemas/
-│   ├── __init__.py
-│   └── task.py
-└── services/
-    ├── __init__.py
-    └── task_service.py
-tests/
-└── test_tasks_api.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── dependencies.py
+│   ├── exceptions.py
+│   ├── logging_config.py
+│   ├── models/
+│   │   ├── task.py
+│   │   └── user.py
+│   ├── repositories/
+│   │   ├── task_repository.py
+│   │   └── user_repository.py
+│   ├── routers/
+│   │   ├── auth.py
+│   │   └── tasks.py
+│   ├── schemas/
+│   │   ├── auth.py
+│   │   └── task.py
+│   ├── security.py
+│   └── services/
+│       ├── auth_service.py
+│       └── task_service.py
+├── tests/
+│   └── test_tasks_api.py
+├── requirements.txt
+└── README.md
 ```
 
-## 3. 功能列表
+## 核心流程
 
-- 健康检查接口
-- 创建任务
-- 查询任务列表
-- 查询单个任务
-- 更新任务
-- 删除任务
-- 任务不存在时返回统一错误格式
-- 路径参数校验
-- 请求体校验
-- 请求日志
-- 错误日志
-- API 自动化测试
+JWT 鉴权流程：
 
-## 4. API 列表
+```text
+1. 用户注册
+2. 用户登录
+3. 后端验证用户名和密码
+4. 后端创建 JWT access_token
+5. 客户端后续请求携带 Authorization: Bearer <token>
+6. 后端解析 token，获取当前用户
+7. token 有效则允许访问受保护接口
+```
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/health` | 健康检查 |
-| GET | `/demo` | 依赖注入示例 |
-| POST | `/tasks` | 创建任务 |
-| GET | `/tasks` | 查询任务列表 |
-| GET | `/tasks/{task_id}` | 查询单个任务 |
-| PATCH | `/tasks/{task_id}` | 更新任务 |
-| DELETE | `/tasks/{task_id}` | 删除任务 |
+## 核心文件
 
+### `app/security.py`
 
-## 5. 接口说明与示例
+负责密码哈希和 JWT。
 
-### 5.1 健康检查
+密码相关：
 
-请求：
+```python
+hash_password(...)
+verify_password(...)
+```
+
+JWT 相关：
+
+```python
+create_access_token(username)
+decode_access_token(token)
+```
+
+token 中保存：
+
+```text
+sub
+当前用户名
+
+exp
+过期时间
+```
+
+当前学习版使用：
+
+```python
+SECRET_KEY = "dev-secret-key-change-me"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+```
+
+真实项目中 `SECRET_KEY` 应该放到环境变量中。
+
+### `app/schemas/auth.py`
+
+新增 token 响应模型：
+
+```python
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+```
+
+登录成功返回：
+
+```json
+{
+  "access_token": "...",
+  "token_type": "bearer"
+}
+```
+
+### `app/routers/auth.py`
+
+认证路由。
+
+注册接口仍然接收 JSON：
+
+```text
+POST /auth/register
+```
+
+登录接口改成 OAuth2 表单：
+
+```python
+form_data: OAuth2PasswordRequestForm = Depends()
+```
+
+这样 Swagger 右上角 `Authorize` 可以直接输入用户名和密码登录。
+
+### `app/dependencies.py`
+
+新增：
+
+```python
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+```
+
+它负责从请求头中提取：
 
 ```http
-GET /health
+Authorization: Bearer <token>
 ```
 
-响应：
-
-```json
-{
-  "status": "ok"
-}
-```
-
-用途：
+新增 `get_current_user`：
 
 ```text
-用于确认 FastAPI 服务是否正常运行。
+读取 token
+解析 token
+取出 username
+查询数据库用户
+返回当前用户
 ```
 
-### 5.2 创建任务
-
-请求：
-
-```http
-POST /tasks
-```
-
-请求体：
-
-```json
-{
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层"
-}
-```
-
-响应状态码：
+如果 token 无效或过期，返回：
 
 ```text
-201 Created
+401 Unauthorized
 ```
 
-响应体：
+### `app/routers/tasks.py`
 
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "todo"
-}
+任务接口加入：
+
+```python
+current_user: User = Depends(get_current_user)
 ```
 
-### 5.3 查询任务列表
+这表示 `/tasks` 相关接口都需要登录后才能访问。
 
-请求：
+当前受保护接口：
 
-```http
-GET /tasks
-```
-
-响应：
-
-```json
-[
-  {
-    "id": 1,
-    "title": "学习 FastAPI",
-    "description": "练习 routers / services / schemas 分层",
-    "status": "todo"
-  }
-]
-```
-
-### 5.4 查询单个任务
-
-请求：
-
-```http
-GET /tasks/1
-```
-
-响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "todo"
-}
-```
-
-任务不存在时：
-
-```http
-GET /tasks/999
-```
-
-响应状态码：
-
-```text
-404 Not Found
-```
-
-响应体：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-### 5.5 更新任务
-
-请求：
-
-```http
-PATCH /tasks/1
-```
-
-请求体：
-
-```json
-{
-  "status": "doing"
-}
-```
-
-响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "doing"
-}
-```
-
-非法状态：
-
-```json
-{
-  "status": "invalid"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-### 5.6 删除任务
-
-请求：
-
-```http
-DELETE /tasks/1
-```
-
-响应状态码：
-
-```text
-204 No Content
-```
-
-说明：
-
-```text
-删除成功后不返回响应体。
-```
-
-### 5.7 参数校验示例
-
-非法路径参数：
-
-```http
-GET /tasks/0
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-task_id 使用 Path(ge=1) 限制，必须大于等于 1。
-```
-
-空标题：
-
-```json
-{
-  "title": "",
-  "description": "标题不能为空"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-title 使用 Field(min_length=1, max_length=100) 限制，不能为空。
-```
-
-## 6. 本地运行
-
-进入项目目录：
-
-```bash
-cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-09-fastapi-dependency-injection
-```
-
-启动服务：
-
-```bash
-../.venv/bin/python -m uvicorn app.main:app --port 8000
-```
-
-访问健康检查：
-
-```text
-http://127.0.0.1:8000/health
-```
-
-访问 Swagger 文档：
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## 7. 示例请求
-
-创建任务：
-
-```json
-{
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分"
-}
-```
-
-成功响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分",
-  "status": "todo"
-}
-```
-
-任务不存在时响应：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-## 8. 运行测试
-
-在项目目录执行：
-
-```bash
-../.venv/bin/python -m pytest
-```
-
-当前测试覆盖：
-
-- `GET /health`
 - `POST /tasks`
 - `GET /tasks`
 - `GET /tasks/{task_id}`
 - `PATCH /tasks/{task_id}`
 - `DELETE /tasks/{task_id}`
-- 任务不存在返回 `404`
-- 非法路径参数返回 `422`
-- 空标题返回 `422`
-- 非法任务状态返回 `422`
 
-## 9. 学习重点
+## API 列表
 
-### FastAPI 路由
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/auth/register` | 用户注册 |
+| POST | `/auth/login` | 登录并返回 token |
+| POST | `/tasks` | 创建任务，需要 token |
+| GET | `/tasks` | 查询任务列表，需要 token |
+| GET | `/tasks/{task_id}` | 查询单个任务，需要 token |
+| PATCH | `/tasks/{task_id}` | 更新任务，需要 token |
+| DELETE | `/tasks/{task_id}` | 删除任务，需要 token |
 
-使用 `APIRouter` 拆分任务路由：
+## Swagger 测试方式
 
-```python
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+1. 先调用 `POST /auth/register` 注册用户。
+
+2. 点击 Swagger 右上角 `Authorize`。
+
+3. 输入：
+
+```text
+username
+password
 ```
 
-### 依赖注入
+4. 不需要填写：
 
-使用 `Depends` 注入 `TaskService`：
-
-```python
-service: TaskService = Depends(get_task_service)
+```text
+client_id
+client_secret
 ```
 
-### Service 层
+5. 登录成功后，Swagger 会自动把 token 加到后续请求中。
 
-任务业务逻辑集中在 `TaskService` 中：
+6. 再访问 `/tasks` 接口。
 
-```python
-service.create_task(task)
-service.list_tasks()
-service.get_task(task_id)
+未授权访问任务接口会返回：
+
+```text
+401 Unauthorized
 ```
 
-### 统一异常处理
+## 测试变化
 
-通过自定义异常和异常处理器返回统一错误格式：
+因为 `/tasks` 接口需要 token，测试中新增 helper：
 
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
+```python
+def get_auth_headers() -> dict[str, str]:
+    ...
+    return {"Authorization": f"Bearer {token}"}
+```
+
+任务接口测试需要传：
+
+```python
+headers=headers
+```
+
+登录接口改成表单请求后，测试中登录使用：
+
+```python
+data={
+    "username": username,
+    "password": password,
 }
 ```
 
-### 日志设计
+而不是：
 
-使用 Python 标准库 `logging` 记录请求日志和错误日志。
-
-请求日志示例：
-
-```text
-INFO app.main GET /tasks 200 0.0032s
+```python
+json={...}
 ```
 
-错误日志示例：
+## 本地运行
 
-```text
-ERROR app.main TaskNotFoundError path=/tasks/999 message=Task 999 not found
+```bash
+../.venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
-### 自动化测试
+访问 Swagger：
 
-使用 `pytest` 和 `TestClient` 自动测试 API，减少手动 Swagger 测试。
+```text
+http://127.0.0.1:8000/docs
+```
 
-## 10. 当前限制
+## 运行测试
 
-- 当前任务数据保存在内存中，服务重启后会丢失
-- 暂未接入数据库
-- 暂未加入用户认证和权限控制
-- 暂未接入真实 Agent 或 LLM
+```bash
+../.venv/bin/python -m pytest
+```
 
-## 11. 后续计划
+## 当前限制
 
-- 接入 SQLite / PostgreSQL
-- 增加数据库 session 依赖
-- 增加用户认证
-- 增加 Agent Run API
-- 增加任务执行 trace
-- 接入 LLM 和工具调用
+- token 里只保存 username
+- 暂未实现 refresh token
+- 暂未把 `SECRET_KEY` 移到环境变量
+- 任务接口只要求登录，但还没有按用户隔离任务
+
+## 后续演进
+
+下一版会继续实现：
+
+```text
+用户只能访问自己的任务
+```
+
+也就是给任务表加入：
+
+```text
+owner_id
+```
+
+并在查询、更新、删除时按当前用户过滤。
+
+## 一句话总结
+
+这个练习实现了 FastAPI JWT 鉴权：登录成功返回 token，客户端通过 `Authorization: Bearer <token>` 访问受保护任务接口。
