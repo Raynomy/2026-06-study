@@ -1,65 +1,139 @@
-# FastAPI Dependency Injection Task API
+# 2026-06-14-01 FastAPI SQLAlchemy
 
-这是一个用于学习 FastAPI 工程化结构的任务管理 API 项目。
+这个目录是在 FastAPI 分层项目基础上加入 SQLite + SQLAlchemy 的版本。
 
-项目从基础 CRUD API 出发，逐步加入了：
+项目重点是把任务数据从内存字典改成数据库持久化存储。
 
-- RESTful API 设计
-- Pydantic 请求体和响应模型
-- FastAPI 依赖注入
-- routers / schemas / services 分层结构
-- 统一异常处理
-- 请求参数校验
-- 请求日志和错误日志
-- pytest + TestClient 自动化测试
+## 学习目标
 
-## 1. 技术栈
+- 学习 SQLAlchemy 基础概念
+- 使用 SQLite 保存任务数据
+- 定义数据库表模型 `Task`
+- 使用 `Session` 执行数据库 CRUD
+- 理解 `schemas` 和 `models` 的区别
+- 通过 FastAPI 依赖注入提供数据库 session
 
-- Python 3.10
-- FastAPI
-- Pydantic
-- Uvicorn
-- pytest
-- TestClient
-
-## 2. 项目结构
+## 项目结构
 
 ```text
-app/
-├── __init__.py
-├── main.py
-├── config.py
-├── exceptions.py
-├── logging_config.py
-├── routers/
+2026-06-14-01-fastapi-sqlalchemy/
+├── app/
 │   ├── __init__.py
-│   └── tasks.py
-├── schemas/
-│   ├── __init__.py
-│   └── task.py
-└── services/
-    ├── __init__.py
-    └── task_service.py
-tests/
-└── test_tasks_api.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── dependencies.py
+│   ├── exceptions.py
+│   ├── logging_config.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── task.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   └── tasks.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── task.py
+│   └── services/
+│       ├── __init__.py
+│       └── task_service.py
+├── tests/
+│   └── test_tasks_api.py
+└── README.md
 ```
 
-## 3. 功能列表
+## 核心文件
 
-- 健康检查接口
-- 创建任务
-- 查询任务列表
-- 查询单个任务
-- 更新任务
-- 删除任务
-- 任务不存在时返回统一错误格式
-- 路径参数校验
-- 请求体校验
-- 请求日志
-- 错误日志
-- API 自动化测试
+### `app/database.py`
 
-## 4. API 列表
+数据库基础配置。
+
+定义：
+
+- `DATABASE_URL`
+- `Base`
+- `engine`
+- `SessionLocal`
+- `get_db`
+
+当前使用 SQLite：
+
+```python
+DATABASE_URL = "sqlite:///./tasks.db"
+```
+
+`get_db()` 是数据库 session 的依赖函数：
+
+```python
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+它负责在请求开始时创建 session，在请求结束后关闭 session。
+
+### `app/models/task.py`
+
+定义数据库表模型。
+
+```python
+class Task(Base):
+    __tablename__ = "tasks"
+```
+
+字段包括：
+
+- `id`
+- `title`
+- `description`
+- `status`
+
+这个文件对应数据库里的 `tasks` 表。
+
+### `app/services/task_service.py`
+
+任务业务逻辑层，同时直接使用 SQLAlchemy `Session` 操作数据库。
+
+当前版本中，service 直接执行：
+
+```python
+self.db.add(...)
+self.db.commit()
+self.db.refresh(...)
+self.db.query(...)
+self.db.delete(...)
+```
+
+也就是说，这个版本的结构是：
+
+```text
+router -> service -> database
+```
+
+后续分层架构版本会继续拆出：
+
+```text
+repository
+```
+
+### `app/schemas/task.py`
+
+定义 API 请求和响应模型。
+
+注意区分：
+
+```text
+schemas/task.py
+用于 API 请求体和响应体
+
+models/task.py
+用于数据库表结构
+```
+
+## API 列表
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -71,377 +145,66 @@ tests/
 | PATCH | `/tasks/{task_id}` | 更新任务 |
 | DELETE | `/tasks/{task_id}` | 删除任务 |
 
+## 本地运行
 
-## 5. 接口说明与示例
-
-### 5.1 健康检查
-
-请求：
-
-```http
-GET /health
-```
-
-响应：
-
-```json
-{
-  "status": "ok"
-}
-```
-
-用途：
-
-```text
-用于确认 FastAPI 服务是否正常运行。
-```
-
-### 5.2 创建任务
-
-请求：
-
-```http
-POST /tasks
-```
-
-请求体：
-
-```json
-{
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层"
-}
-```
-
-响应状态码：
-
-```text
-201 Created
-```
-
-响应体：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "todo"
-}
-```
-
-### 5.3 查询任务列表
-
-请求：
-
-```http
-GET /tasks
-```
-
-响应：
-
-```json
-[
-  {
-    "id": 1,
-    "title": "学习 FastAPI",
-    "description": "练习 routers / services / schemas 分层",
-    "status": "todo"
-  }
-]
-```
-
-### 5.4 查询单个任务
-
-请求：
-
-```http
-GET /tasks/1
-```
-
-响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "todo"
-}
-```
-
-任务不存在时：
-
-```http
-GET /tasks/999
-```
-
-响应状态码：
-
-```text
-404 Not Found
-```
-
-响应体：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-### 5.5 更新任务
-
-请求：
-
-```http
-PATCH /tasks/1
-```
-
-请求体：
-
-```json
-{
-  "status": "doing"
-}
-```
-
-响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "doing"
-}
-```
-
-非法状态：
-
-```json
-{
-  "status": "invalid"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-### 5.6 删除任务
-
-请求：
-
-```http
-DELETE /tasks/1
-```
-
-响应状态码：
-
-```text
-204 No Content
-```
-
-说明：
-
-```text
-删除成功后不返回响应体。
-```
-
-### 5.7 参数校验示例
-
-非法路径参数：
-
-```http
-GET /tasks/0
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-task_id 使用 Path(ge=1) 限制，必须大于等于 1。
-```
-
-空标题：
-
-```json
-{
-  "title": "",
-  "description": "标题不能为空"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-title 使用 Field(min_length=1, max_length=100) 限制，不能为空。
-```
-
-## 6. 本地运行
-
-进入项目目录：
-
-```bash
-cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-09-fastapi-dependency-injection
-```
-
-启动服务：
+在本目录执行：
 
 ```bash
 ../.venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
-访问健康检查：
-
-```text
-http://127.0.0.1:8000/health
-```
-
-访问 Swagger 文档：
+访问 Swagger：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-## 7. 示例请求
+第一次启动时会根据 SQLAlchemy model 创建 SQLite 数据库文件：
 
-创建任务：
-
-```json
-{
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分"
-}
+```text
+tasks.db
 ```
 
-成功响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分",
-  "status": "todo"
-}
-```
-
-任务不存在时响应：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-## 8. 运行测试
-
-在项目目录执行：
+## 运行测试
 
 ```bash
 ../.venv/bin/python -m pytest
 ```
 
-当前测试覆盖：
+## 这版和上一版的区别
 
-- `GET /health`
-- `POST /tasks`
-- `GET /tasks`
-- `GET /tasks/{task_id}`
-- `PATCH /tasks/{task_id}`
-- `DELETE /tasks/{task_id}`
-- 任务不存在返回 `404`
-- 非法路径参数返回 `422`
-- 空标题返回 `422`
-- 非法任务状态返回 `422`
-
-## 9. 学习重点
-
-### FastAPI 路由
-
-使用 `APIRouter` 拆分任务路由：
-
-```python
-router = APIRouter(prefix="/tasks", tags=["tasks"])
-```
-
-### 依赖注入
-
-使用 `Depends` 注入 `TaskService`：
-
-```python
-service: TaskService = Depends(get_task_service)
-```
-
-### Service 层
-
-任务业务逻辑集中在 `TaskService` 中：
-
-```python
-service.create_task(task)
-service.list_tasks()
-service.get_task(task_id)
-```
-
-### 统一异常处理
-
-通过自定义异常和异常处理器返回统一错误格式：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-### 日志设计
-
-使用 Python 标准库 `logging` 记录请求日志和错误日志。
-
-请求日志示例：
+上一版使用内存字典：
 
 ```text
-INFO app.main GET /tasks 200 0.0032s
+self.tasks: dict[int, TaskResponse]
 ```
 
-错误日志示例：
+这一版使用 SQLite：
 
 ```text
-ERROR app.main TaskNotFoundError path=/tasks/999 message=Task 999 not found
+tasks.db
 ```
 
-### 自动化测试
+数据会持久化保存，服务重启后仍然存在。
 
-使用 `pytest` 和 `TestClient` 自动测试 API，减少手动 Swagger 测试。
+## 当前限制
 
-## 10. 当前限制
+- 数据库表结构通过 `Base.metadata.create_all()` 创建
+- 暂未使用 Alembic 迁移
+- service 层仍然直接操作数据库
+- 暂未拆出 repository 层
+- 暂未加入用户认证和权限隔离
 
-- 当前任务数据保存在内存中，服务重启后会丢失
-- 暂未接入数据库
-- 暂未加入用户认证和权限控制
-- 暂未接入真实 Agent 或 LLM
+## 后续演进
 
-## 11. 后续计划
+下一步会继续拆分为：
 
-- 接入 SQLite / PostgreSQL
-- 增加数据库 session 依赖
-- 增加用户认证
-- 增加 Agent Run API
-- 增加任务执行 trace
-- 接入 LLM 和工具调用
+```text
+router -> service -> repository -> database
+```
+
+也就是把数据库访问逻辑从 `TaskService` 中移到 `TaskRepository`。
+
+## 一句话总结
+
+这个练习把任务数据从内存存储升级为 SQLite 数据库存储，学习了 SQLAlchemy 的 `engine`、`Session`、`Base`、数据库 model 和基础 CRUD。
