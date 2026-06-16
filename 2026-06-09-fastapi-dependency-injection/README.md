@@ -1,65 +1,158 @@
-# FastAPI Dependency Injection Task API
+# 2026-06-09 FastAPI Dependency Injection
 
-这是一个用于学习 FastAPI 工程化结构的任务管理 API 项目。
+这个目录是在 FastAPI 基础 CRUD 项目上继续演进的版本。
 
-项目从基础 CRUD API 出发，逐步加入了：
+项目重点是把第一天集中在 `main.py` 里的代码拆成更接近真实后端项目的结构，并学习 FastAPI 的依赖注入、统一异常处理、日志和自动化测试。
 
-- RESTful API 设计
-- Pydantic 请求体和响应模型
-- FastAPI 依赖注入
-- routers / schemas / services 分层结构
-- 统一异常处理
-- 请求参数校验
-- 请求日志和错误日志
-- pytest + TestClient 自动化测试
+## 学习目标
 
-## 1. 技术栈
+- 使用 `APIRouter` 拆分路由
+- 使用 `Depends` 注入业务服务
+- 拆分 `routers`、`schemas`、`services`
+- 增加 `config.py` 管理基础配置
+- 增加 `dependencies.py` 管理依赖对象
+- 实现统一异常处理
+- 使用 `Path` 和 Pydantic 做参数校验
+- 增加请求日志和错误日志
+- 使用 `pytest` + `TestClient` 测试 API
 
-- Python 3.10
-- FastAPI
-- Pydantic
-- Uvicorn
-- pytest
-- TestClient
-
-## 2. 项目结构
+## 项目结构
 
 ```text
-app/
-├── __init__.py
-├── main.py
-├── config.py
-├── exceptions.py
-├── logging_config.py
-├── routers/
+2026-06-09-fastapi-dependency-injection/
+├── app/
 │   ├── __init__.py
-│   └── tasks.py
-├── schemas/
-│   ├── __init__.py
-│   └── task.py
-└── services/
-    ├── __init__.py
-    └── task_service.py
-tests/
-└── test_tasks_api.py
+│   ├── main.py
+│   ├── config.py
+│   ├── dependencies.py
+│   ├── exceptions.py
+│   ├── logging_config.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   └── tasks.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── task.py
+│   └── services/
+│       ├── __init__.py
+│       └── task_service.py
+├── tests/
+│   └── test_tasks_api.py
+└── README.md
 ```
 
-## 3. 功能列表
+## 核心文件
 
-- 健康检查接口
+### `app/main.py`
+
+应用入口，负责：
+
+- 创建 FastAPI app
+- 加载配置
+- 注册请求日志 middleware
+- 注册异常处理器
+- 保留 `/health` 和 `/demo`
+- 注册任务 router
+
+### `app/routers/tasks.py`
+
+任务 API 路由层。
+
+负责定义：
+
+- `POST /tasks`
+- `GET /tasks`
+- `GET /tasks/{task_id}`
+- `PATCH /tasks/{task_id}`
+- `DELETE /tasks/{task_id}`
+
+路由层只负责接收请求和调用 service。
+
+### `app/services/task_service.py`
+
+任务业务逻辑层。
+
+当前版本仍然使用内存字典保存任务数据：
+
+```text
+self.tasks
+self.next_task_id
+```
+
+所以服务重启后任务数据会丢失。
+
+### `app/dependencies.py`
+
+依赖注入层。
+
+这里创建一个全局 `TaskService` 实例，并通过依赖函数提供给路由：
+
+```python
+task_service = TaskService()
+
+
+def get_task_service() -> TaskService:
+    return task_service
+```
+
+路由中使用：
+
+```python
+service: TaskService = Depends(get_task_service)
+```
+
+### `app/schemas/task.py`
+
+任务相关 Pydantic 模型。
+
+包含：
+
+- `TaskCreate`
+- `TaskUpdate`
+- `TaskResponse`
+- `TaskStatus`
+
+用于请求体校验、响应模型和 Swagger 文档生成。
+
+### `app/exceptions.py`
+
+定义业务异常：
+
+```python
+TaskNotFoundError
+```
+
+当任务不存在时，service 层抛出业务异常，`main.py` 统一转换成 HTTP 响应。
+
+### `app/logging_config.py`
+
+配置 Python 标准库 `logging`。
+
+项目中记录：
+
+- 请求方法
+- 请求路径
+- 响应状态码
+- 请求耗时
+- 业务错误信息
+
+### `tests/test_tasks_api.py`
+
+使用 `pytest` 和 `TestClient` 测试 API。
+
+覆盖：
+
+- 健康检查
 - 创建任务
 - 查询任务列表
 - 查询单个任务
 - 更新任务
 - 删除任务
-- 任务不存在时返回统一错误格式
-- 路径参数校验
-- 请求体校验
-- 请求日志
-- 错误日志
-- API 自动化测试
+- 任务不存在返回 `404`
+- 非法路径参数返回 `422`
+- 请求体校验失败返回 `422`
 
-## 4. API 列表
+## API 列表
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -71,40 +164,9 @@ tests/
 | PATCH | `/tasks/{task_id}` | 更新任务 |
 | DELETE | `/tasks/{task_id}` | 删除任务 |
 
+## 示例请求
 
-## 5. 接口说明与示例
-
-### 5.1 健康检查
-
-请求：
-
-```http
-GET /health
-```
-
-响应：
-
-```json
-{
-  "status": "ok"
-}
-```
-
-用途：
-
-```text
-用于确认 FastAPI 服务是否正常运行。
-```
-
-### 5.2 创建任务
-
-请求：
-
-```http
-POST /tasks
-```
-
-请求体：
+创建任务：
 
 ```json
 {
@@ -113,53 +175,7 @@ POST /tasks
 }
 ```
 
-响应状态码：
-
-```text
-201 Created
-```
-
-响应体：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "todo"
-}
-```
-
-### 5.3 查询任务列表
-
-请求：
-
-```http
-GET /tasks
-```
-
-响应：
-
-```json
-[
-  {
-    "id": 1,
-    "title": "学习 FastAPI",
-    "description": "练习 routers / services / schemas 分层",
-    "status": "todo"
-  }
-]
-```
-
-### 5.4 查询单个任务
-
-请求：
-
-```http
-GET /tasks/1
-```
-
-响应：
+成功响应：
 
 ```json
 {
@@ -172,18 +188,6 @@ GET /tasks/1
 
 任务不存在时：
 
-```http
-GET /tasks/999
-```
-
-响应状态码：
-
-```text
-404 Not Found
-```
-
-响应体：
-
 ```json
 {
   "code": "TASK_NOT_FOUND",
@@ -191,257 +195,60 @@ GET /tasks/999
 }
 ```
 
-### 5.5 更新任务
+## 本地运行
 
-请求：
-
-```http
-PATCH /tasks/1
-```
-
-请求体：
-
-```json
-{
-  "status": "doing"
-}
-```
-
-响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习 routers / services / schemas 分层",
-  "status": "doing"
-}
-```
-
-非法状态：
-
-```json
-{
-  "status": "invalid"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-### 5.6 删除任务
-
-请求：
-
-```http
-DELETE /tasks/1
-```
-
-响应状态码：
-
-```text
-204 No Content
-```
-
-说明：
-
-```text
-删除成功后不返回响应体。
-```
-
-### 5.7 参数校验示例
-
-非法路径参数：
-
-```http
-GET /tasks/0
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-task_id 使用 Path(ge=1) 限制，必须大于等于 1。
-```
-
-空标题：
-
-```json
-{
-  "title": "",
-  "description": "标题不能为空"
-}
-```
-
-响应状态码：
-
-```text
-422 Unprocessable Entity
-```
-
-原因：
-
-```text
-title 使用 Field(min_length=1, max_length=100) 限制，不能为空。
-```
-
-## 6. 本地运行
-
-进入项目目录：
-
-```bash
-cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-09-fastapi-dependency-injection
-```
-
-启动服务：
+在本目录执行：
 
 ```bash
 ../.venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
-访问健康检查：
-
-```text
-http://127.0.0.1:8000/health
-```
-
-访问 Swagger 文档：
+访问：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-## 7. 示例请求
+## 运行测试
 
-创建任务：
-
-```json
-{
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分"
-}
-```
-
-成功响应：
-
-```json
-{
-  "id": 1,
-  "title": "学习 FastAPI",
-  "description": "练习依赖注入和项目结构拆分",
-  "status": "todo"
-}
-```
-
-任务不存在时响应：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-## 8. 运行测试
-
-在项目目录执行：
+在本目录执行：
 
 ```bash
 ../.venv/bin/python -m pytest
 ```
 
-当前测试覆盖：
+## 当前特点
 
-- `GET /health`
-- `POST /tasks`
-- `GET /tasks`
-- `GET /tasks/{task_id}`
-- `PATCH /tasks/{task_id}`
-- `DELETE /tasks/{task_id}`
-- 任务不存在返回 `404`
-- 非法路径参数返回 `422`
-- 空标题返回 `422`
-- 非法任务状态返回 `422`
+这个版本完成了从单文件 CRUD 到分层结构的第一次升级。
 
-## 9. 学习重点
-
-### FastAPI 路由
-
-使用 `APIRouter` 拆分任务路由：
-
-```python
-router = APIRouter(prefix="/tasks", tags=["tasks"])
-```
-
-### 依赖注入
-
-使用 `Depends` 注入 `TaskService`：
-
-```python
-service: TaskService = Depends(get_task_service)
-```
-
-### Service 层
-
-任务业务逻辑集中在 `TaskService` 中：
-
-```python
-service.create_task(task)
-service.list_tasks()
-service.get_task(task_id)
-```
-
-### 统一异常处理
-
-通过自定义异常和异常处理器返回统一错误格式：
-
-```json
-{
-  "code": "TASK_NOT_FOUND",
-  "message": "Task 999 not found"
-}
-```
-
-### 日志设计
-
-使用 Python 标准库 `logging` 记录请求日志和错误日志。
-
-请求日志示例：
+核心变化：
 
 ```text
-INFO app.main GET /tasks 200 0.0032s
+main.py 不再负责所有事情
+router 负责 API
+service 负责业务
+schema 负责数据模型
+dependencies 负责注入服务对象
 ```
 
-错误日志示例：
+## 当前限制
 
-```text
-ERROR app.main TaskNotFoundError path=/tasks/999 message=Task 999 not found
-```
-
-### 自动化测试
-
-使用 `pytest` 和 `TestClient` 自动测试 API，减少手动 Swagger 测试。
-
-## 10. 当前限制
-
-- 当前任务数据保存在内存中，服务重启后会丢失
+- 任务数据仍保存在内存中
+- 服务重启后任务会丢失
 - 暂未接入数据库
-- 暂未加入用户认证和权限控制
-- 暂未接入真实 Agent 或 LLM
+- 暂未加入用户认证
+- 暂未实现用户权限隔离
 
-## 11. 后续计划
+## 后续演进
 
-- 接入 SQLite / PostgreSQL
-- 增加数据库 session 依赖
-- 增加用户认证
-- 增加 Agent Run API
-- 增加任务执行 trace
-- 接入 LLM 和工具调用
+后续项目会继续加入：
+
+- SQLite + SQLAlchemy
+- Repository 层
+- 用户注册和登录
+- JWT 鉴权
+- 任务归属和权限隔离
+
+## 一句话总结
+
+这个练习把 FastAPI 任务 CRUD 项目从单文件写法升级为 `routers / schemas / services / dependencies` 分层结构，并加入异常处理、日志和自动化测试。
