@@ -73,6 +73,9 @@ JWT 解决的是：
 │       └── task_service.py
 ├── tests/
 │   └── test_tasks_api.py
+├── .dockerignore
+├── Dockerfile
+├── requirements.txt
 └── README.md
 ```
 
@@ -236,6 +239,77 @@ tests/test_tasks_api.py
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+## Docker 入门
+
+Docker 的作用是把项目代码、Python 环境和依赖打包到一个统一的运行环境里。
+
+这次新增两个文件：
+
+```text
+Dockerfile
+.dockerignore
+```
+
+`Dockerfile` 用来描述镜像如何构建：
+
+```text
+1. 使用 Python 3.10 基础镜像
+2. 进入容器内的 /app 目录
+3. 复制 requirements.txt
+4. 安装项目依赖
+5. 复制 app 代码
+6. 暴露 8000 端口
+7. 启动 uvicorn
+```
+
+`.dockerignore` 用来排除不需要进入镜像的本地文件：
+
+```text
+.venv
+__pycache__
+.pytest_cache
+*.pyc
+tasks.db
+.git
+.DS_Store
+```
+
+其中 `tasks.db` 不打进镜像，容器运行时会重新创建数据库文件。
+
+构建镜像：
+
+```bash
+docker build -t fastapi-task-ownership .
+```
+
+运行容器：
+
+```bash
+docker run --name fastapi-task-ownership-container -p 8000:8000 fastapi-task-ownership
+```
+
+访问接口文档：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+测试健康检查：
+
+```text
+http://127.0.0.1:8000/health
+```
+
+本次 Docker 测试流程：
+
+```text
+1. 构建镜像成功
+2. 容器启动 FastAPI 成功
+3. /docs 可以打开
+4. /health 返回正常
+5. 在 Swagger 中完成注册、登录、创建任务、查询任务
 ```
 
 ## 运行测试
