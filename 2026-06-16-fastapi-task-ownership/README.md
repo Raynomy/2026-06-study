@@ -8,6 +8,20 @@
 用户只能访问自己的任务
 ```
 
+## 项目亮点
+
+- 使用 FastAPI 实现 RESTful CRUD API
+- 使用 Pydantic 定义请求体和响应模型
+- 使用 SQLAlchemy + SQLite 保存用户和任务数据
+- 使用 Repository / Service / Router 分层组织代码
+- 使用密码哈希保存用户密码，不保存明文密码
+- 使用 JWT 实现登录后 token 鉴权
+- 使用 `OAuth2PasswordBearer` 保护任务接口
+- 使用 `owner_id` 实现用户任务权限隔离
+- 使用统一异常格式返回业务错误
+- 使用 pytest + TestClient 覆盖核心接口
+- 使用 Dockerfile 打包 FastAPI 运行环境
+
 ## 学习目标
 
 - 理解认证和授权的区别
@@ -41,6 +55,33 @@ JWT 解决的是：
 
 ```text
 只允许 current_user.id 操作 owner_id 等于自己的任务
+```
+
+数据库 Database：
+
+```text
+用 SQLite 保存用户和任务数据
+用 SQLAlchemy 模型描述数据库表结构
+```
+
+Docker：
+
+```text
+把 FastAPI 项目和 Python 依赖打包成可运行的容器镜像
+```
+
+## 技术栈
+
+```text
+Python 3.10
+FastAPI
+Pydantic
+SQLAlchemy
+SQLite
+PyJWT
+pwdlib
+pytest
+Docker
 ```
 
 ## 项目结构
@@ -81,6 +122,40 @@ JWT 解决的是：
 
 ## 主要改动
 
+### 0. 分层结构
+
+当前项目按后端常见分层组织：
+
+```text
+routers
+接收 HTTP 请求，负责路径、状态码、依赖注入
+
+schemas
+定义请求和响应的数据结构
+
+models
+定义数据库表结构
+
+repositories
+封装数据库 CRUD 操作
+
+services
+编写业务逻辑
+
+dependencies
+提供数据库 session、service、current_user 等依赖
+```
+
+请求大致流向：
+
+```text
+HTTP 请求
+-> router
+-> service
+-> repository
+-> database
+```
+
 ### 1. Task 表新增 owner_id
 
 文件：
@@ -102,7 +177,47 @@ owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, in
 owner_id 对应 users.id
 ```
 
-### 2. Repository 按 owner_id 过滤
+### 2. 数据库保存数据
+
+用户表：
+
+```text
+users
+```
+
+保存：
+
+```text
+id
+username
+hashed_password
+is_active
+```
+
+任务表：
+
+```text
+tasks
+```
+
+保存：
+
+```text
+id
+title
+description
+status
+owner_id
+```
+
+相比早期内存版项目，数据库版的变化是：
+
+```text
+数据不再只存在 Python 列表中
+而是保存到 SQLite 数据库文件中
+```
+
+### 3. Repository 按 owner_id 过滤
 
 文件：
 
@@ -126,7 +241,7 @@ get_by_id_and_owner(task_id, owner_id)
 
 这样即使任务 id 存在，只要不属于当前用户，也查不到。
 
-### 3. Service 接收 current_user
+### 4. Service 接收 current_user
 
 文件：
 
@@ -152,7 +267,7 @@ owner_id=current_user.id
 都使用 current_user.id 作为 owner_id 过滤条件
 ```
 
-### 4. Router 传入 current_user
+### 5. Router 传入 current_user
 
 文件：
 
@@ -174,6 +289,33 @@ service.list_tasks(current_user)
 service.get_task(task_id, current_user)
 service.update_task(task_id, update_data, current_user)
 service.delete_task(task_id, current_user)
+```
+
+### 6. JWT 鉴权
+
+登录成功后返回：
+
+```json
+{
+  "access_token": "...",
+  "token_type": "bearer"
+}
+```
+
+之后访问任务接口时，请求头携带：
+
+```http
+Authorization: Bearer <token>
+```
+
+后端通过 `get_current_user`：
+
+```text
+读取 token
+解析 token
+取出 username
+查询用户
+返回当前用户
 ```
 
 ## 权限规则
@@ -327,6 +469,45 @@ http://127.0.0.1:8000/health
 ```text
 Alembic 数据库迁移
 ```
+
+## 当前项目能力
+
+这个项目已经具备一个小型 FastAPI 后端的基本形态：
+
+```text
+接口层
+数据模型
+数据库表
+数据库操作层
+业务逻辑层
+用户注册
+密码哈希
+JWT 登录
+接口鉴权
+权限隔离
+自动化测试
+Docker 运行
+```
+
+## 当前限制
+
+- SQLite 适合学习和本地开发，正式项目通常会使用 PostgreSQL 或 MySQL
+- 数据库迁移还没有接入 Alembic
+- JWT secret 仍是学习阶段配置，真实项目应使用环境变量
+- token 只有 access token，还没有 refresh token
+- 任务功能还比较简单，没有分页、搜索、排序
+- Docker 还没有加入 docker-compose
+
+## 后续可以继续完善
+
+- 接入 Alembic 做数据库迁移
+- 使用环境变量管理 `SECRET_KEY` 和数据库地址
+- 增加 refresh token
+- 增加分页查询
+- 增加 docker-compose
+- 接入 PostgreSQL
+- 增加更完整的 README API 示例
+- 开始做 Agent 后端项目
 
 ## 和 Agent 项目的关系
 
