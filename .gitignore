@@ -9,3 +9,5 @@ __pycache__/
 demo.txt
 **/demo.txt
 *.db
+.env
+**/.env
