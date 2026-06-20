@@ -164,3 +164,117 @@ RAG 问答：temperature=0.1~0.3
 Agent 工具调用：temperature=0.0~0.3
 普通聊天：temperature=0.7 左右
 ```
+
+## FastAPI Chat API
+
+本项目在最小聊天脚本基础上，新增了 FastAPI 接口。
+
+新增项目结构：
+
+```text
+app/
+├── __init__.py
+├── main.py
+├── schemas.py
+└── services.py
+```
+
+各文件作用：
+
+```text
+app/main.py
+创建 FastAPI 应用，定义 /health 和 /chat 接口
+
+app/schemas.py
+定义 ChatRequest 和 ChatResponse
+
+app/services.py
+封装 LLM API 调用逻辑
+```
+
+### /chat 接口
+
+请求方式：
+
+```http
+POST /chat
+```
+
+请求体：
+
+```json
+{
+  "question": "请用一句话解释 FastAPI。"
+}
+```
+
+响应体：
+
+```json
+{
+  "answer": "FastAPI 是一个基于 Python 的现代、高性能 Web 框架..."
+}
+```
+
+### 启动服务
+
+先加载环境变量：
+
+```bash
+export $(cat .env | xargs)
+```
+
+启动 FastAPI：
+
+```bash
+../.venv/bin/python -m uvicorn app.main:app --reload --port 8001
+```
+
+访问 Swagger：
+
+```text
+http://127.0.0.1:8001/docs
+```
+
+### curl 测试
+
+成功请求：
+
+```bash
+curl -X POST "http://127.0.0.1:8001/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "请用一句话解释 JWT。"}'
+```
+
+成功响应：
+
+```json
+{
+  "answer": "JWT（JSON Web Token）是一种基于JSON的开放标准..."
+}
+```
+
+失败请求：
+
+```bash
+curl -X POST "http://127.0.0.1:8001/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"question": ""}'
+```
+
+失败原因：
+
+```text
+question 最小长度是 1，不能为空
+FastAPI 自动返回 422
+```
+
+### 本次接口链路
+
+```text
+客户端请求 /chat
+-> FastAPI 接收请求
+-> ChatRequest 校验 question
+-> ChatService 调用 LLM API
+-> ChatResponse 返回 answer
+```
