@@ -16,9 +16,9 @@ class TaskRepository:
             owner_id=owner_id,
         )
 
-        self.db.add(db_task)
-        self.db.commit()
-        self.db.refresh(db_task)
+        self.db.add(db_task) #把对象加入数据库会话，可以理解为加入购物车
+        self.db.commit() #真正提交到数据库，可以理解为：付款下单
+        self.db.refresh(db_task) #从数据库重新读取这条数据，更新 db_task 这个 Python 对象
 
         return db_task
 
@@ -28,13 +28,13 @@ class TaskRepository:
             .filter(Task.owner_id == owner_id)
             .order_by(Task.id)
             .all()
-        )
+        ) #这段是 SQLAlchemy 的链式查询写法：
 
     def get_by_id_and_owner(self, task_id: int, owner_id: int) -> Task | None:
         return (
             self.db.query(Task)
             .filter(Task.id == task_id, Task.owner_id == owner_id)
-            .first()
+            .first() #task_id 是唯一的，最多只会有一个任务
         )
 
     def update(self, db_task: Task, update_data: TaskUpdate) -> Task:
