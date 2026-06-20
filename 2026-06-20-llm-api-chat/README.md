@@ -120,3 +120,47 @@ OpenAI SDK 可以调用 aihubmix 兼容接口
 - 设计 `/chat` API
 - 实现流式输出
 - 加入错误处理、日志和 token 使用记录
+
+
+## 模型参数实验
+
+本项目测试了 `temperature`、`top_p`、`max_tokens` 对输出的影响。
+
+测试问题：
+
+```text
+请用三句话介绍 FastAPI 的优点。
+```
+
+实验结果总结：
+
+| 参数组合 | 观察结果 |
+|---|---|
+| `temperature=0.1, top_p=1.0, max_tokens=120` | 输出稳定、正式，接近标准答案 |
+| `temperature=0.7, top_p=1.0, max_tokens=120` | 输出更自然，内容更丰富 |
+| `temperature=1.2, top_p=1.0, max_tokens=120` | 理论上更发散，但简单问题下变化不明显 |
+| `temperature=0.7, top_p=0.5, max_tokens=120` | 输出更收敛，扩展内容更少 |
+| `temperature=0.7, top_p=1.0, max_tokens=40` | 输出被截断，说明 max_tokens 太小 |
+
+参数理解：
+
+```text
+temperature
+控制随机性。越低越稳定，越高越开放。
+
+top_p
+控制候选词范围。越低越收敛，越高越开放。
+
+max_tokens
+控制最大输出长度。太小会导致回答被截断。
+```
+
+实际建议：
+
+```text
+技术问答：temperature=0.2~0.5
+结构化输出：temperature=0.0~0.3
+RAG 问答：temperature=0.1~0.3
+Agent 工具调用：temperature=0.0~0.3
+普通聊天：temperature=0.7 左右
+```
