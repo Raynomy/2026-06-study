@@ -1,6 +1,8 @@
 # 2026-06-20 LLM API Chat
 
-这是 LLM API 学习的第一个项目，用于练习通过 OpenAI 兼容接口调用大模型，并完成最小单轮聊天脚本。
+这是一个基于 FastAPI 的 LLM Chat API 学习项目，用于练习通过 OpenAI 兼容接口调用大模型，并逐步实现单轮聊天、多轮对话、流式输出、错误处理、日志记录和 token 使用量记录。
+
+本项目使用的是 aihubmix.com 的 OpenAI 兼容接口，模型示例为 `deepseek-v4-flash`。
 
 ## 学习目标
 
@@ -9,14 +11,60 @@
 - 理解 `system`、`user`、`assistant` 三类消息
 - 使用环境变量管理 API Key、Base URL 和模型名
 - 编写最小单轮聊天脚本
+- 理解 `temperature`、`top_p`、`max_tokens` 参数
+- 使用 FastAPI 封装 `/chat` 接口
+- 使用 `session_id` 实现简单多轮对话
+- 使用内存保存对话历史
+- 实现上下文长度裁剪
+- 实现普通响应和流式响应
+- 给 LLM API 调用加入统一异常处理
+- 加入请求日志、错误日志和 token usage 日志
+- 实现简单 retry 机制
 
 ## 项目结构
 
 ```text
 2026-06-20-llm-api-chat/
-├── chat.py
 ├── .env.example
-└── README.md
+├── README.md
+├── chat.py
+├── parameter_experiment.py
+└── app/
+    ├── __init__.py
+    ├── exceptions.py
+    ├── logging_config.py
+    ├── main.py
+    ├── memory.py
+    ├── schemas.py
+    └── services.py
+```
+
+## 文件说明
+
+```text
+chat.py
+最小 LLM API 调用脚本，用于理解 OpenAI SDK 的基础调用方式。
+
+parameter_experiment.py
+模型参数实验脚本，用于测试 temperature、top_p、max_tokens 对输出的影响。
+
+app/main.py
+FastAPI 应用入口，定义 /health、/chat、/chat/stream 接口，并注册请求日志和统一异常处理。
+
+app/schemas.py
+定义 API 请求和响应模型，例如 ChatRequest、ChatResponse。
+
+app/services.py
+封装 LLM API 调用逻辑，包括普通响应、流式响应、retry、错误日志和 token usage 日志。
+
+app/memory.py
+使用内存字典保存多轮对话历史，并实现上下文裁剪。
+
+app/exceptions.py
+定义项目自定义异常，例如 LLMServiceError。
+
+app/logging_config.py
+定义日志基础配置。
 ```
 
 ## 环境变量
@@ -31,96 +79,160 @@ AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 AIHUBMIX_MODEL=deepseek-v4-flash
 ```
 
-## 核心代码
+## 安装依赖
 
-`chat.py` 中通过 OpenAI SDK 创建客户端：
-
-```python
-client = OpenAI(
-    api_key=os.getenv("AIHUBMIX_API_KEY"),
-    base_url=os.getenv("AIHUBMIX_BASE_URL"),
-)
-```
-
-通过模型名调用聊天接口：
-
-```python
-response = client.chat.completions.create(
-    model=model,
-    messages=[
-        {
-            "role": "system",
-            "content": "你是一个简洁清晰的 Python 后端学习助手。",
-        },
-        {
-            "role": "user",
-            "content": question,
-        },
-    ],
-)
-```
-
-## 三类消息
-
-`system`：
-
-```text
-规定模型的角色、语气和行为方式
-```
-
-`user`：
-
-```text
-用户提出的问题
-```
-
-`assistant`：
-
-```text
-模型之前回答过的内容，常用于多轮对话上下文
-```
-
-## 运行方式
-
-先加载本地环境变量：
+在项目根目录的上一级共享虚拟环境中安装依赖。
 
 ```bash
-export $(cat .env | xargs)
+../.venv/bin/python -m pip install openai python-dotenv fastapi uvicorn
 ```
 
-运行脚本：
+如果已经安装过，可以跳过。
+
+## 启动服务
+
+进入项目目录：
 
 ```bash
-../.venv/bin/python chat.py
+cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-20-llm-api-chat
 ```
 
-## 测试结果
+启动 FastAPI：
 
-运行成功后，模型返回了关于 FastAPI 的一句话解释，说明：
+```bash
+../.venv/bin/python -m uvicorn app.main:app --reload --port 8001
+```
+
+访问 Swagger：
 
 ```text
-API Key 可用
-Base URL 可用
-模型名称可用
-OpenAI SDK 可以调用 aihubmix 兼容接口
-最小单轮问答流程跑通
+http://127.0.0.1:8001/docs
 ```
 
-## 当前限制
+## 健康检查接口
 
-- 目前只支持单轮问答
-- 还没有接入 FastAPI API
-- 还没有保存多轮对话历史
-- 还没有实现流式输出
-- 还没有统一错误处理和重试
+请求方式：
 
-## 下一步
+```http
+GET /health
+```
 
-- 实现多轮对话
-- 设计 `/chat` API
-- 实现流式输出
-- 加入错误处理、日志和 token 使用记录
+响应示例：
 
+```json
+{
+  "status": "ok"
+}
+```
+
+## 普通聊天接口
+
+请求方式：
+
+```http
+POST /chat
+```
+
+请求体：
+
+```json
+{
+  "session_id": "demo-session",
+  "question": "请用一句话解释 FastAPI。"
+}
+```
+
+响应体：
+
+```json
+{
+  "session_id": "demo-session",
+  "answer": "FastAPI 是一个基于 Python 的现代、高性能 Web 框架..."
+}
+```
+
+curl 示例：
+
+```bash
+curl -X POST "http://127.0.0.1:8001/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "demo-session", "question": "请用一句话解释 JWT。"}'
+```
+
+## 流式聊天接口
+
+请求方式：
+
+```http
+POST /chat/stream
+```
+
+请求体：
+
+```json
+{
+  "session_id": "stream-demo",
+  "question": "请用三句话解释什么是 FastAPI。"
+}
+```
+
+curl 测试：
+
+```bash
+curl -N -X POST "http://127.0.0.1:8001/chat/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "stream-demo", "question": "请用三句话解释什么是 FastAPI。"}'
+```
+
+说明：
+
+```text
+/chat 是普通响应，模型生成完成后一次性返回完整 answer。
+/chat/stream 是流式响应，模型边生成边返回内容。
+```
+
+## 多轮对话
+
+本项目使用 `session_id` 区分不同会话。
+
+同一个 `session_id` 下的连续请求会共享历史上下文。
+
+示例：
+
+第一次请求：
+
+```json
+{
+  "session_id": "demo-session",
+  "question": "请用一句话解释 FastAPI。"
+}
+```
+
+第二次请求：
+
+```json
+{
+  "session_id": "demo-session",
+  "question": "它和 Flask 有什么区别？"
+}
+```
+
+如果第二次仍然使用同一个 `session_id`，模型可以理解“它”指的是 FastAPI。
+
+如果换成新的 `session_id`，模型就不会拥有上一轮上下文。
+
+## 上下文裁剪
+
+多轮对话历史保存在内存中。
+
+为了避免上下文无限增长，项目会限制历史消息数量。
+
+```text
+只保留最近若干条 user / assistant 消息
+过旧的消息会被裁剪
+```
+
+这样可以控制 token 消耗，也避免请求越来越慢。
 
 ## 模型参数实验
 
@@ -165,116 +277,166 @@ Agent 工具调用：temperature=0.0~0.3
 普通聊天：temperature=0.7 左右
 ```
 
-## FastAPI Chat API
+## 错误处理
 
-本项目在最小聊天脚本基础上，新增了 FastAPI 接口。
-
-新增项目结构：
+项目中定义了统一异常：
 
 ```text
-app/
-├── __init__.py
-├── main.py
-├── schemas.py
-└── services.py
+LLMServiceError
 ```
 
-各文件作用：
+当 LLM API 调用失败时，服务层会捕获底层 `OpenAIError`，然后抛出 `LLMServiceError`。
 
-```text
-app/main.py
-创建 FastAPI 应用，定义 /health 和 /chat 接口
-
-app/schemas.py
-定义 ChatRequest 和 ChatResponse
-
-app/services.py
-封装 LLM API 调用逻辑
-```
-
-### /chat 接口
-
-请求方式：
-
-```http
-POST /chat
-```
-
-请求体：
+FastAPI 在 `app/main.py` 中统一捕获该异常，并返回：
 
 ```json
 {
-  "question": "请用一句话解释 FastAPI。"
+  "code": "LLM_SERVICE_ERROR",
+  "message": "LLM service is temporarily unavailable"
 }
 ```
 
-响应体：
+状态码：
+
+```text
+503 Service Unavailable
+```
+
+## retry 机制
+
+普通 `/chat` 接口实现了简单 retry。
+
+```text
+最多重试 2 次
+每次失败后等待 1 秒
+```
+
+总请求次数是：
+
+```text
+第 1 次：正常尝试
+第 2 次：第 1 次重试
+第 3 次：第 2 次重试
+```
+
+如果 3 次都失败，就返回统一的 `503` 错误。
+
+注意：
+
+```text
+/chat 支持 retry
+/chat/stream 暂时不做 retry
+```
+
+原因是流式接口可能已经返回了一部分内容，如果中途失败后直接重试，可能导致客户端收到重复内容。
+
+## 日志
+
+项目中包含三类日志：
+
+```text
+请求日志
+记录 method、path、status_code、duration
+
+错误日志
+记录 LLM API 调用失败信息
+
+token usage 日志
+记录 prompt_tokens、completion_tokens、total_tokens
+```
+
+示例：
+
+```text
+INFO app.main POST /chat 200 1.2345s
+INFO app.services LLM usage prompt_tokens=20 completion_tokens=50 total_tokens=70
+ERROR app.services LLM API error attempt=1 error=...
+```
+
+## 常见错误
+
+请求体缺少字段：
 
 ```json
 {
-  "answer": "FastAPI 是一个基于 Python 的现代、高性能 Web 框架..."
+  "question": "请解释 FastAPI"
 }
 ```
 
-### 启动服务
-
-先加载环境变量：
-
-```bash
-export $(cat .env | xargs)
-```
-
-启动 FastAPI：
-
-```bash
-../.venv/bin/python -m uvicorn app.main:app --reload --port 8001
-```
-
-访问 Swagger：
+返回：
 
 ```text
-http://127.0.0.1:8001/docs
+422 Unprocessable Entity
 ```
 
-### curl 测试
+原因：
 
-成功请求：
-
-```bash
-curl -X POST "http://127.0.0.1:8001/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "请用一句话解释 JWT。"}'
+```text
+缺少 session_id
+请求没有通过 ChatRequest 校验
 ```
 
-成功响应：
+API Key 错误：
+
+```text
+.env 中 AIHUBMIX_API_KEY 配置错误
+```
+
+返回：
 
 ```json
 {
-  "answer": "JWT（JSON Web Token）是一种基于JSON的开放标准..."
+  "code": "LLM_SERVICE_ERROR",
+  "message": "LLM service is temporarily unavailable"
 }
 ```
 
-失败请求：
-
-```bash
-curl -X POST "http://127.0.0.1:8001/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"question": ""}'
-```
-
-失败原因：
+状态码：
 
 ```text
-question 最小长度是 1，不能为空
-FastAPI 自动返回 422
+503
 ```
 
-### 本次接口链路
+区别：
 
 ```text
-客户端请求 /chat
--> FastAPI 接收请求
--> ChatRequest 校验 question
--> ChatService 调用 LLM API
--> ChatResponse 返回 answer
+422 = 请求格式错误，由 Pydantic 校验返回
+503 = 请求格式正确，但 LLM 服务调用失败
 ```
+
+## 当前能力
+
+目前项目已经实现：
+
+- 最小 LLM API 调用脚本
+- 模型参数实验
+- FastAPI `/chat` 接口
+- FastAPI `/chat/stream` 接口
+- Pydantic 请求和响应模型
+- 基于 `session_id` 的多轮对话
+- 内存版对话历史
+- 上下文长度裁剪
+- 普通响应
+- 流式响应
+- 统一异常处理
+- 请求日志
+- 错误日志
+- token usage 日志
+- 简单 retry
+
+## 当前限制
+
+- 对话历史只保存在内存中，服务重启后会丢失
+- 暂时没有接入数据库或 Redis
+- 暂时没有用户系统
+- 暂时没有权限隔离
+- 流式接口暂时没有 retry
+- 还没有补充自动化测试
+
+## 下一步
+
+- 补充基础测试
+- 将对话历史持久化
+- 接入用户身份
+- 按用户隔离会话
+- 为 RAG 和 Agent 工具调用打基础
