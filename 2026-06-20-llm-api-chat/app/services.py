@@ -43,3 +43,38 @@ def chat_with_llm(session_id: str, question: str) -> str:
     save_message(session_id, "assistant", answer)
 
     return answer
+
+def chat_with_llm_stream(session_id: str, question: str):
+    history = get_history(session_id)
+
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一个耐心、清晰的中文学习助手。",
+        },
+        *history,
+        {
+            "role": "user",
+            "content": question,
+        },
+    ]
+
+    stream = client.chat.completions.create(
+        model=os.getenv("AIHUBMIX_MODEL", "deepseek-v4-flash"),
+        messages=messages,
+        temperature=0.7,
+        max_tokens=500,
+        stream=True,
+    )
+
+    full_answer = ""
+
+    for chunk in stream:
+        content = chunk.choices[0].delta.content
+
+        if content:
+            full_answer += content
+            yield content
+
+    save_message(session_id, "user", question)
+    save_message(session_id, "assistant", full_answer)

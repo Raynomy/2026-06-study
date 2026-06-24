@@ -1,3 +1,5 @@
+#模型参数实验脚本。
+#作用是：对同一个问题测试不同参数组合，用来观察模型输出的稳定性、创造性、长度变化。
 import os
 
 from openai import OpenAI

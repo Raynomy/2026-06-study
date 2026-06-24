@@ -1,3 +1,5 @@
+#最早的单文件 LLM API 调用脚本。
+#作用是：直接在终端里调用大模型，验证 API Key、base_url、model、messages 是否能正常工作。
 import os
 
 from openai import OpenAI
