@@ -1,12 +1,10 @@
 from fastapi import FastAPI
 
 from app.schemas import ChatRequest, ChatResponse
-from app.services import ChatService
+from app.services import chat_with_llm
 
 
-app = FastAPI(title="LLM API Chat")
-
-chat_service = ChatService()
+app = FastAPI()
 
 
 @app.get("/health")
@@ -15,6 +13,13 @@ def health_check():
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(data: ChatRequest):
-    answer = chat_service.chat(data.question)
-    return ChatResponse(answer=answer)
+def chat(request: ChatRequest):
+    answer = chat_with_llm(
+        session_id=request.session_id,
+        question=request.question,
+    )
+
+    return ChatResponse(
+        session_id=request.session_id,
+        answer=answer,
+    )
