@@ -1,6 +1,8 @@
-# 2026-06-20 LLM API Chat
+# 2026-06-26 LLM API Prompt Template
 
-这是一个基于 FastAPI 的 LLM Chat API 学习项目，用于练习通过 OpenAI 兼容接口调用大模型，并逐步实现单轮聊天、多轮对话、流式输出、错误处理、日志记录和 token 使用量记录。
+这是一个基于 FastAPI 的 LLM Chat API 学习项目，在原有 Chat API 基础上新增了 prompt template 概念，用于练习分类、抽取、总结三类任务模板，以及 JSON 结构化输出和 Pydantic 校验。
+
+项目来源于 `2026-06-20-llm-api-chat` 的复制版本，保留了原有单轮聊天、多轮对话、流式输出、错误处理、日志记录和 token 使用量记录能力，并新增 `/chat/template` 接口。
 
 本项目使用的是 aihubmix.com 的 OpenAI 兼容接口，模型示例为 `deepseek-v4-flash`。
 
@@ -20,11 +22,15 @@
 - 给 LLM API 调用加入统一异常处理
 - 加入请求日志、错误日志和 token usage 日志
 - 实现简单 retry 机制
+- 理解 prompt template 的作用
+- 支持根据 `task_type` 选择不同任务模板
+- 实现分类、抽取、总结三个模板
+- 使用 Pydantic 校验结构化输出
 
 ## 项目结构
 
 ```text
-2026-06-20-llm-api-chat/
+2026-06-26-llm-api-prompt-template/
 ├── .env.example
 ├── README.md
 ├── chat.py
@@ -35,6 +41,7 @@
     ├── logging_config.py
     ├── main.py
     ├── memory.py
+    ├── prompt_templates.py
     ├── schemas.py
     └── services.py
 ```
@@ -55,7 +62,10 @@ app/schemas.py
 定义 API 请求和响应模型，例如 ChatRequest、ChatResponse。
 
 app/services.py
-封装 LLM API 调用逻辑，包括普通响应、流式响应、retry、错误日志和 token usage 日志。
+封装 LLM API 调用逻辑，包括普通响应、流式响应、prompt template 调用、JSON 解析、Pydantic 校验、retry、错误日志和 token usage 日志。
+
+app/prompt_templates.py
+定义分类、抽取、总结三个任务模板。
 
 app/memory.py
 使用内存字典保存多轮对话历史，并实现上下文裁剪。
@@ -94,7 +104,7 @@ AIHUBMIX_MODEL=deepseek-v4-flash
 进入项目目录：
 
 ```bash
-cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-20-llm-api-chat
+cd /Users/xiongzehao/Desktop/python进阶/2026-06-study/2026-06-26-llm-api-prompt-template
 ```
 
 启动 FastAPI：
@@ -190,6 +200,117 @@ curl -N -X POST "http://127.0.0.1:8001/chat/stream" \
 /chat 是普通响应，模型生成完成后一次性返回完整 answer。
 /chat/stream 是流式响应，模型边生成边返回内容。
 ```
+
+## Prompt Template 接口
+
+请求方式：
+
+```http
+POST /chat/template
+```
+
+这个接口用于根据 `task_type` 选择不同 prompt template，并返回经过 Pydantic 校验后的结构化结果。
+
+支持的任务类型：
+
+```text
+classification
+文本分类
+
+extraction
+任务信息抽取
+
+summary
+文本总结
+```
+
+### 分类模板
+
+请求体：
+
+```json
+{
+  "task_type": "classification",
+  "input_text": "今天学习了 FastAPI 的依赖注入和 JWT 鉴权。"
+}
+```
+
+响应示例：
+
+```json
+{
+  "task_type": "classification",
+  "result": {
+    "category": "技术学习",
+    "reason": "文本明确提到学习 FastAPI 的依赖注入和 JWT 鉴权，属于技术学习范畴。"
+  }
+}
+```
+
+### 抽取模板
+
+请求体：
+
+```json
+{
+  "task_type": "extraction",
+  "input_text": "请在本周五之前完成 FastAPI 项目的 README 整理，优先级高。"
+}
+```
+
+响应示例：
+
+```json
+{
+  "task_type": "extraction",
+  "result": {
+    "task_name": "FastAPI 项目的 README 整理",
+    "deadline": "本周五",
+    "priority": "高"
+  }
+}
+```
+
+### 总结模板
+
+请求体：
+
+```json
+{
+  "task_type": "summary",
+  "input_text": "FastAPI 是一个现代 Python Web 框架，适合构建 API。它支持自动生成文档、请求参数校验和异步处理，能提高后端接口开发效率。"
+}
+```
+
+响应示例：
+
+```json
+{
+  "task_type": "summary",
+  "result": {
+    "summary": "FastAPI是高效构建API的现代Python框架，支持自动文档、参数校验和异步处理。",
+    "key_points": [
+      "自动生成API文档",
+      "请求参数自动校验",
+      "支持异步处理"
+    ]
+  }
+}
+```
+
+## Prompt Template 调用链路
+
+```text
+POST /chat/template
+-> 读取 task_type 和 input_text
+-> 根据 task_type 选择 prompt template
+-> 调用 LLM
+-> json.loads() 解析模型 JSON 输出
+-> Pydantic 校验结构化结果
+-> 返回 TemplateChatResponse
+```
+
+这个流程把 prompt 从脚本实验接入到真实 FastAPI 服务中，是后续 RAG、Agent、工具调用的基础能力。
 
 ## 多轮对话
 
@@ -423,6 +544,10 @@ API Key 错误：
 - 错误日志
 - token usage 日志
 - 简单 retry
+- Prompt Template API
+- 分类、抽取、总结三个任务模板
+- JSON 结构化输出解析
+- Pydantic 结构化结果校验
 
 ## 当前限制
 
@@ -432,6 +557,8 @@ API Key 错误：
 - 暂时没有权限隔离
 - 流式接口暂时没有 retry
 - 还没有补充自动化测试
+- `/chat/template` 暂时只支持三个固定模板
+- 模型输出 JSON 解析失败时只做 retry，暂未接入专门的 JSON repair prompt
 
 ## 下一步
 
@@ -440,3 +567,5 @@ API Key 错误：
 - 接入用户身份
 - 按用户隔离会话
 - 为 RAG 和 Agent 工具调用打基础
+- 为 prompt template 增加评测集
+- 为结构化输出增加 JSON repair 流程
