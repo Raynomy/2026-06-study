@@ -116,3 +116,39 @@ POST /documents/search
 - 目前只支持直接上传文本，不支持真实文件上传
 - chunk 策略较简单，只按固定字符长度切分
 - 目前只做检索，还没有接入 chat model 生成最终答案
+
+## 本阶段复盘
+
+本阶段从脚本版向量检索，升级到了 FastAPI 接口版 RAG 文档检索服务。
+
+已经完成的能力：
+
+- 使用 `/documents/upload` 接收文档文本
+- 使用 `split_text()` 将文档切分成 chunks
+- 使用 embedding model 将 chunk 转成向量
+- 使用 Qdrant 保存向量和 payload
+- payload 中保存 `chunk_id`、`text`、`source`、`paragraph`
+- 使用 `/documents/search` 接收用户 query
+- 将 query 转成向量后进行 top-k 检索
+- 返回检索命中的文本、来源、段落位置和相似度分数
+
+核心链路：
+
+文档文本
+-> chunk 切分
+-> chunk embedding
+-> 写入 Qdrant
+-> query embedding
+-> Qdrant top-k 检索
+-> 返回 source / paragraph / score
+
+当前项目还不是完整 RAG 问答系统，因为它只完成了“检索”部分，还没有把检索结果交给 chat model 生成最终答案。
+
+后续可以继续扩展：
+
+- 支持真实文件上传
+- 支持 PDF / Markdown 解析
+- 接入 chat model 生成回答
+- 增加相似度阈值过滤
+- 将 Qdrant 从内存模式改为持久化或 Docker 服务
+- 增加测试用例
