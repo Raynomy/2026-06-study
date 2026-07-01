@@ -27,33 +27,49 @@ def get_embedding(text: str) -> list[float]:
 
     return response.data[0].embedding
 
-
 chunks = [
     {
         "chunk_id": "fastapi-auth-001",
         "text": "FastAPI 可以结合 JWT 实现用户登录和接口鉴权。",
-        "source": "fastapi_notes.md",
         "metadata": {
+            "source": "fastapi_notes.md",
+            "page": None,
+            "paragraph": 1,
+            "title": "鉴权",
             "topic": "FastAPI",
-            "section": "鉴权",
         },
     },
     {
         "chunk_id": "fastapi-test-001",
         "text": "pytest 可以用来给 FastAPI 接口编写自动化测试。",
-        "source": "fastapi_notes.md",
         "metadata": {
+            "source": "fastapi_notes.md",
+            "page": None,
+            "paragraph": 2,
+            "title": "测试",
             "topic": "FastAPI",
-            "section": "测试",
         },
     },
     {
         "chunk_id": "rag-basic-001",
         "text": "RAG 会先检索相关文档，再让大模型基于上下文生成答案。",
-        "source": "rag_notes.md",
         "metadata": {
+            "source": "rag_notes.md",
+            "page": None,
+            "paragraph": 1,
+            "title": "RAG 基础流程",
             "topic": "RAG",
-            "section": "基础流程",
+        },
+    },
+    {
+        "chunk_id": "docker-basic-001",
+        "text": "Docker 可以把应用和运行环境打包成容器，方便部署和复现。",
+        "metadata": {
+            "source": "docker_notes.md",
+            "page": None,
+            "paragraph": 1,
+            "title": "Docker 入门",
+            "topic": "Docker",
         },
     },
 ]
@@ -78,8 +94,7 @@ for index, chunk in enumerate(chunks, start=1):
             payload={
                 "chunk_id": chunk["chunk_id"],
                 "text": chunk["text"],
-                "source": chunk["source"],
-                "metadata": chunk["metadata"],
+                **chunk["metadata"],
             },
         )
     )
@@ -91,26 +106,34 @@ qdrant_client.upsert(
 
 print("Inserted chunks:", len(points))
 
+queries = [
+    "FastAPI 怎么实现用户登录鉴权？",
+    "RAG 为什么需要先检索文档？",
+    "Docker 有什么作用？",
+]
 
-query = "FastAPI 怎么实现用户登录鉴权？"
-query_vector = get_embedding(query)
+for query in queries:
+    query_vector = get_embedding(query)
 
-search_results = qdrant_client.query_points(
-    collection_name=COLLECTION_NAME,
-    query=query_vector,
-    limit=2,
-)
+    search_results = qdrant_client.query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_vector,
+        limit=2,
+    )
 
-print("=" * 60)
-print("用户问题：")
-print(query)
-print("检索结果：")
+    print("=" * 60)
+    print("用户问题：")
+    print(query)
+    print("检索结果：")
 
-for index, result in enumerate(search_results.points, start=1):
-    payload = result.payload
+    for index, result in enumerate(search_results.points, start=1):
+        payload = result.payload
 
-    print(f"{index}. 相似度：{result.score:.4f}")
-    print(f"   chunk_id：{payload['chunk_id']}")
-    print(f"   source：{payload['source']}")
-    print(f"   metadata：{payload['metadata']}")
-    print(f"   text：{payload['text']}")
+        print(f"{index}. 相似度：{result.score:.4f}")
+        print(f"   chunk_id：{payload['chunk_id']}")
+        print(f"   source：{payload['source']}")
+        print(f"   page：{payload['page']}")
+        print(f"   paragraph：{payload['paragraph']}")
+        print(f"   title：{payload['title']}")
+        print(f"   topic：{payload['topic']}")
+        print(f"   text：{payload['text']}")
