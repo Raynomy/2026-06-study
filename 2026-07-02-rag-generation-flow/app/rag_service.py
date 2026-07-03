@@ -14,7 +14,7 @@ client = OpenAI(
     timeout=60.0,
 )
 
-MIN_RELEVANCE_SCORE = 0.6
+MIN_RELEVANCE_SCORE = 0.75
 
 def build_context(sources: list[AnswerSource]) -> str:
     context_parts = []
@@ -36,7 +36,7 @@ def answer_with_context(question: str, top_k: int = 3) -> DocumentAnswerResponse
         for result in search_chunks(query=question, top_k=top_k)
         if result.score >= MIN_RELEVANCE_SCORE
     ]
-    
+
     sources = [
         AnswerSource(
             chunk_id=result.chunk_id,
@@ -58,13 +58,18 @@ def answer_with_context(question: str, top_k: int = 3) -> DocumentAnswerResponse
     context = build_context(sources)
 
     prompt = f"""
-你是一个严格基于资料回答问题的中文助手。
+你是一个严格遵守 grounding 规则的中文 RAG 助手。
 
-要求：
-1. 只能根据【资料】回答问题
-2. 如果资料中没有答案，回答“资料中没有提到”
-3. 不要编造资料外的信息
-4. 回答要简洁清楚
+你的任务：
+只根据【资料】回答【问题】。
+
+Grounding 规则：
+1. 只能使用【资料】中明确出现的信息
+2. 不能使用你自己的背景知识补充答案
+3. 不能推测、扩展或编造资料外的信息
+4. 如果【资料】不足以回答问题，必须回答“资料中没有提到”
+5. 如果只能回答一部分，就只回答资料能支持的部分
+6. 回答要简洁清楚
 
 【资料】
 {context}
