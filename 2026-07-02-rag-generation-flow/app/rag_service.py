@@ -3,12 +3,15 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.exceptions import RAGServiceError
 from app.schemas import AnswerSource, DocumentAnswerResponse
 from app.vector_store import search_chunks
 
 load_dotenv()
 
-client = OpenAI(
+CHAT_MODEL = os.getenv("AIHUBMIX_MODEL", "deepseek-v4-flash")
+
+openai_client = OpenAI(
     api_key=os.getenv("AIHUBMIX_API_KEY"),
     base_url=os.getenv("AIHUBMIX_BASE_URL"),
     timeout=60.0,
