@@ -78,19 +78,35 @@ Grounding 规则：
 {question}
 """
 
-    response = client.chat.completions.create(
-        model=os.getenv("AIHUBMIX_MODEL", "deepseek-v4-flash"),
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-        temperature=0.2,
-        max_tokens=500,
-    )
+    try:
+        response = openai_client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一个严格遵守资料来源的中文 RAG 助手。",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.2,
+            max_tokens=500,
+        )
+    except Exception as exc:
+        raise RAGServiceError(
+            code="LLM_GENERATION_ERROR",
+            message="Failed to generate answer",
+        ) from exc
 
     answer = response.choices[0].message.content
+
+    if answer is None:
+        raise RAGServiceError(
+            code="LLM_EMPTY_ANSWER",
+            message="LLM returned empty answer",
+        )
 
     return DocumentAnswerResponse(
         question=question,

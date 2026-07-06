@@ -6,6 +6,7 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from app.exceptions import RAGServiceError
 from app.schemas import SearchResult
 
 
@@ -25,29 +26,40 @@ qdrant_client = QdrantClient(":memory:")
 
 
 def get_embedding(text: str) -> list[float]:
-    response = openai_client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=text,
-    )
+    try:
+        response = openai_client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=text,
+        )
+    except Exception as exc:
+        raise RAGServiceError(
+            code="EMBEDDING_ERROR",
+            message="Failed to create embedding",
+        ) from exc
 
     return response.data[0].embedding
 
 
 def init_collection() -> None:
-    existing_collections = qdrant_client.get_collections().collections
-    existing_names = [collection.name for collection in existing_collections]
+    try:
+        existing_collections = qdrant_client.get_collections().collections
+        existing_names = [collection.name for collection in existing_collections]
 
-    if COLLECTION_NAME in existing_names:
-        return
+        if COLLECTION_NAME in existing_names:
+            return
 
-    qdrant_client.create_collection(
-        collection_name=COLLECTION_NAME,
-        vectors_config=VectorParams(
-            size=VECTOR_SIZE,
-            distance=Distance.COSINE,
-        ),
-    )
-
+        qdrant_client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=VECTOR_SIZE,
+                distance=Distance.COSINE,
+            ),
+        )
+    except Exception as exc:
+        raise RAGServiceError(
+            code="VECTOR_STORE_ERROR",
+            message="Failed to initialize vector store",
+        ) from exc
 
 def add_chunks(filename: str, chunks: list[str]) -> int:
     init_collection()
@@ -72,10 +84,16 @@ def add_chunks(filename: str, chunks: list[str]) -> int:
             )
         )
 
-    qdrant_client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=points,
-    )
+    try:
+        qdrant_client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=points,
+        )
+    except Exception as exc:
+        raise RAGServiceError(
+            code="VECTOR_STORE_ERROR",
+            message="Failed to save chunks to vector store",
+        ) from exc
 
     return len(points)
 
@@ -85,11 +103,17 @@ def search_chunks(query: str, top_k: int) -> list[SearchResult]:
 
     query_vector = get_embedding(query)
 
-    search_results = qdrant_client.query_points(
-        collection_name=COLLECTION_NAME,
-        query=query_vector,
-        limit=top_k,
-    )
+    try:
+        search_results = qdrant_client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=query_vector,
+            limit=top_k,
+        )
+    except Exception as exc:
+        raise RAGServiceError(
+            code="VECTOR_SEARCH_ERROR",
+            message="Failed to search vector store",
+        ) from exc
 
     results = []
 
