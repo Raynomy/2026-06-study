@@ -104,7 +104,7 @@ sources 中包含：
 ## 3. 项目结构
 
 ```text
-2026-07-08-rag-project-polish/
+2026-07-07-rag-project-polish/
 ├── app/
 │   ├── __init__.py
 │   ├── exceptions.py
@@ -177,7 +177,7 @@ AIHUBMIX_EMBEDDING_MODEL=your-embedding-model
 进入项目目录：
 
 ```bash
-cd /Users/xiongzehao/代码/python进阶/2026-06-study/2026-07-08-rag-project-polish
+cd /Users/xiongzehao/代码/python进阶/2026-06-study/2026-07-07-rag-project-polish
 ```
 
 启动服务：
